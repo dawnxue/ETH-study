@@ -1,0 +1,93 @@
+//问题
+//实现一个 WETH，将 ETH 包装成 ERC20
+
+//WETH (Wrapped ETH) 是 ETH 的包装版本。由于以太币本身并不符合 ERC20 标准，导致与其他代币之间的互操作性较弱，难以用于去中心化应用程序（dApps）。
+
+//本练习要求实现一个符合 ERC20 标准的 WETH ，它比普通的 ERC20 多了两个功能：存款和取款，通过这两个功能，WETH 可以 1:1 兑换ETH。
+//您可在GitHub上书写此题目代码，最后将所完成的内容链接填写至此处即可。
+
+
+
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.0;
+
+contract WETH {
+    string public name = "Wrapped Ether";
+    string public symbol = "WETH";
+    uint8 public decimals = 18;
+
+    // 总供应量
+    uint256 public totalSupply;
+    // 映射地址到WETH余额
+    mapping(address => uint256) public balanceOf;
+    // 允许某个地址操作另一个地址代币的授权额度
+    mapping(address => mapping(address => uint256)) public allowance;
+
+    // 事件：转账事件
+    event Transfer(address indexed from, address indexed to, uint256 value);
+    // 事件：授权事件
+    event Approval(address indexed owner, address indexed spender, uint256 value);
+    // 事件：存款事件
+    event Deposit(address indexed account, uint256 value);
+    // 事件：取款事件
+    event Withdrawal(address indexed account, uint256 value);
+
+    // 存款函数 - 用户发送ETH给合约并接收等量WETH
+    function deposit() public payable {
+        balanceOf[msg.sender] += msg.value;
+        totalSupply += msg.value; // 增加总供应量
+        emit Deposit(msg.sender, msg.value);
+        emit Transfer(address(0), msg.sender, msg.value); // 表示代币的发行
+    }
+
+    // 取款函数 - 用户销毁WETH并取回等量ETH
+    function withdraw(uint256 _amount) public {
+        require(balanceOf[msg.sender] >= _amount, "Insufficient balance");
+        balanceOf[msg.sender] -= _amount;
+        totalSupply -= _amount; // 减少总供应量
+        payable(msg.sender).transfer(_amount);
+        emit Withdrawal(msg.sender, _amount);
+        emit Transfer(msg.sender, address(0), _amount); // 表示代币的销毁
+    }
+
+    // 转账函数 - ERC20标准的转账
+    function transfer(address _to, uint256 _value) public returns (bool) {
+        require(balanceOf[msg.sender] >= _value, "Insufficient balance");
+        balanceOf[msg.sender] -= _value;
+        balanceOf[_to] += _value;
+        emit Transfer(msg.sender, _to, _value);
+        return true;
+    }
+
+    // 授权函数 - 授权第三方账户可以转移用户的代币
+    function approve(address _spender, uint256 _value) public returns (bool) {
+        allowance[msg.sender][_spender] = _value;
+        emit Approval(msg.sender, _spender, _value);
+        return true;
+    }
+
+    // 代币转移函数（由被授权者调用）- 从其他用户账户中转移代币
+    function transferFrom(
+        address _from,
+        address _to,
+        uint256 _value
+    ) public returns (bool) {
+        require(balanceOf[_from] >= _value, "Insufficient balance");
+        require(allowance[_from][msg.sender] >= _value, "Allowance exceeded");
+        balanceOf[_from] -= _value;
+        balanceOf[_to] += _value;
+        allowance[_from][msg.sender] -= _value;
+        emit Transfer(_from, _to, _value);
+        return true;
+    }
+
+    // 获取合约的 ETH 余额（即合约中存有多少ETH）
+    function getEthBalance() public view returns (uint256) {
+        return address(this).balance;
+    }
+
+    // 回退函数，用于接收ETH
+    receive() external payable {
+        deposit();
+    }
+}
